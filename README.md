@@ -121,6 +121,5 @@ SentinelMind introduces the **HRS Engine**, a background prosessing layer that c
 ---
 
 <div align="center">
-  <p><i>Built for the Future of Security.</i></p>
-  <p>© 2024 Team AntiGravity</p>
+  <p>© 2025 Team GRAVITON</p>
 </div>
