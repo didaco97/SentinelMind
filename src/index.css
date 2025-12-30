@@ -113,23 +113,29 @@
     font-family: var(--font-body);
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-heading);
   }
 }
 
 @layer components {
+
   /* Glassmorphism card */
   .glass-card {
     @apply bg-card/40 backdrop-blur-xl border border-border/50 rounded-xl;
-    box-shadow: 
+    box-shadow:
       0 0 40px -10px hsl(var(--glow-cyan) / 0.1),
       inset 0 1px 0 0 hsl(var(--foreground) / 0.05);
   }
 
   .glass-card-strong {
     @apply bg-card/60 backdrop-blur-2xl border border-border/60 rounded-xl;
-    box-shadow: 
+    box-shadow:
       0 0 60px -15px hsl(var(--glow-cyan) / 0.15),
       inset 0 1px 0 0 hsl(var(--foreground) / 0.08);
   }
@@ -188,6 +194,7 @@
 }
 
 @layer utilities {
+
   /* Smooth transitions */
   .transition-smooth {
     @apply transition-all duration-300 ease-out;
@@ -196,14 +203,36 @@
   .transition-glow {
     @apply transition-all duration-500 ease-in-out;
   }
+
+  /* Custom thin scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 4px;
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.2);
+    border-radius: 100px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.5);
+  }
 }
 
 /* Keyframe animations */
 @keyframes breathing {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(1);
     opacity: 0.8;
   }
+
   50% {
     transform: scale(1.02);
     opacity: 1;
@@ -214,25 +243,32 @@
   0% {
     transform: translateX(0) translateY(0);
   }
+
   25% {
     transform: translateX(10px) translateY(-10px);
   }
+
   50% {
     transform: translateX(0) translateY(-5px);
   }
+
   75% {
     transform: translateX(-10px) translateY(-10px);
   }
+
   100% {
     transform: translateX(0) translateY(0);
   }
 }
 
 @keyframes pulseGlow {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.6;
     filter: blur(20px);
   }
+
   50% {
     opacity: 1;
     filter: blur(30px);
@@ -240,12 +276,16 @@
 }
 
 @keyframes float {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px) rotate(0deg);
   }
+
   33% {
     transform: translateY(-10px) rotate(1deg);
   }
+
   66% {
     transform: translateY(5px) rotate(-1deg);
   }
@@ -256,10 +296,12 @@
     transform: scale(0.8);
     opacity: 0.6;
   }
+
   50% {
     transform: scale(1.1);
     opacity: 0.3;
   }
+
   100% {
     transform: scale(0.8);
     opacity: 0.6;
@@ -270,6 +312,7 @@
   0% {
     stroke-dashoffset: 0;
   }
+
   100% {
     stroke-dashoffset: -100;
   }
@@ -279,6 +322,7 @@
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
