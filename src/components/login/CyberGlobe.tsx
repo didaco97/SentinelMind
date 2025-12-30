@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 
 // Math helpers
-const GLOBE_RADIUS = 180;
 const ROTATION_SPEED = 0.002;
 
 interface Point3D {
@@ -22,6 +21,7 @@ interface Arc {
 
 export const CyberGlobe = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const radiusRef = useRef<number>(180);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -36,11 +36,15 @@ export const CyberGlobe = () => {
             canvas.height = canvas.offsetHeight * window.devicePixelRatio;
             ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
             ctx.translate(canvas.offsetWidth / 2, canvas.offsetHeight / 2);
+
+            // Dynamic Radius based on screen size
+            radiusRef.current = Math.min(canvas.offsetWidth, canvas.offsetHeight) * 0.4;
         };
         resize();
         window.addEventListener('resize', resize);
 
         // Generate sphere points (Fibonacci Sphere)
+        // Normalized points (radius 1)
         const points: Point3D[] = [];
         const phi = Math.PI * (3 - Math.sqrt(5));
         for (let i = 0; i < 400; i++) {
@@ -51,7 +55,7 @@ export const CyberGlobe = () => {
             const x = Math.cos(theta) * radius;
             const z = Math.sin(theta) * radius;
 
-            points.push({ x: x * GLOBE_RADIUS, y: y * GLOBE_RADIUS, z: z * GLOBE_RADIUS, lat: 0, lng: 0 });
+            points.push({ x, y, z, lat: 0, lng: 0 });
         }
 
         // Attacks
@@ -64,9 +68,9 @@ export const CyberGlobe = () => {
             const start = points[Math.floor(Math.random() * points.length)];
             const end = points[Math.floor(Math.random() * points.length)];
 
-            // Only short-medium distance attacks
+            // Scaled dist check
             const dist = Math.sqrt(Math.pow(start.x - end.x, 2) + Math.pow(start.y - end.y, 2) + Math.pow(start.z - end.z, 2));
-            if (dist < 50 || dist > 300) return;
+            if (dist < 0.2 || dist > 1.5) return; // Normalized filtering
 
             attacks.push({
                 start,
@@ -78,6 +82,9 @@ export const CyberGlobe = () => {
         };
 
         const draw = () => {
+            // Use current dynamic radius
+            const R = radiusRef.current;
+
             ctx.save();
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -90,20 +97,25 @@ export const CyberGlobe = () => {
             const rotatedPoints = points.map(p => {
                 const x = p.x * Math.cos(rotation) - p.z * Math.sin(rotation);
                 const z = p.x * Math.sin(rotation) + p.z * Math.cos(rotation);
-                return { ...p, x, z, visible: z > 0 }; // Simple occlusion
+                return {
+                    x: x * R,
+                    y: p.y * R,
+                    z: z * R,
+                    visible: z > 0
+                };
             });
 
             // Sort by depth for correct z-indexing (painters algorithm)
             rotatedPoints.forEach(p => {
                 if (p.z > 0) {
-                    const alpha = p.z / GLOBE_RADIUS;
+                    const alpha = p.z / R;
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
                     ctx.fillStyle = `rgba(100, 116, 139, ${alpha * 0.5})`;
                     ctx.fill();
                 } else {
                     // Backside dots (dimmer)
-                    const alpha = (p.z + GLOBE_RADIUS) / GLOBE_RADIUS; // normalize
+                    const alpha = (p.z + R) / R; // normalize
                     if (alpha > 0) {
                         ctx.beginPath();
                         ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
@@ -122,21 +134,17 @@ export const CyberGlobe = () => {
                 const rotatePoint = (p: Point3D) => {
                     const x = p.x * Math.cos(rotation) - p.z * Math.sin(rotation);
                     const z = p.x * Math.sin(rotation) + p.z * Math.cos(rotation);
-                    return { x, y: p.y, z };
+                    return { x: x * R, y: p.y * R, z: z * R };
                 };
                 const s = rotatePoint(attack.start);
                 const e = rotatePoint(attack.end);
 
                 // Quadratic Bezier Curve for "Arc" height
                 const midX = (s.x + e.x) / 2;
-                const midY = (s.y + e.e) / 2; // Typo fix: e.y not e.e
-                // Wait, I see a typo in my previous attempt: e.e? No, looking at "const midY = (s.y + e.y) / 2;" 
-
-                // Let's re-calculate midY properly
-                const midY2 = (s.y + e.y) / 2;
+                const midY = (s.y + e.y) / 2;
                 const scalar = 1.5;
                 const cpX = midX * scalar;
-                const cpY = midY2 * scalar;
+                const cpY = midY * scalar;
 
                 if (s.z > -50 && e.z > -50) { // Only draw if mostly visible
                     // Draw full subtle arc
