@@ -1,203 +1,126 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import Globe, { GlobeMethods } from 'react-globe.gl';
 
-// Math helpers
-const ROTATION_SPEED = 0.002;
-
-interface Point3D {
-    x: number;
-    y: number;
-    z: number;
-    lat: number;
-    lng: number;
-}
-
-interface Arc {
-    start: Point3D;
-    end: Point3D;
-    progress: number;
-    speed: number;
-    color: string;
+// Type for our random arcs
+interface ArcData {
+    startLat: number;
+    startLng: number;
+    endLat: number;
+    endLng: number;
+    color: string | string[];
 }
 
 export const CyberGlobe = () => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const radiusRef = useRef<number>(180);
+    const globeEl = useRef<GlobeMethods | undefined>(undefined);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
+    // Handle resize to keep globe responsive
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // Handle resize
-        const resize = () => {
-            canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-            canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-            ctx.translate(canvas.offsetWidth / 2, canvas.offsetHeight / 2);
-
-            // Dynamic Radius based on screen size
-            radiusRef.current = Math.min(canvas.offsetWidth, canvas.offsetHeight) * 0.4;
+        const updateDimensions = () => {
+            if (containerRef.current) {
+                setDimensions({
+                    width: containerRef.current.offsetWidth,
+                    height: containerRef.current.offsetHeight
+                });
+            }
         };
-        resize();
-        window.addEventListener('resize', resize);
 
-        // Generate sphere points (Fibonacci Sphere)
-        // Normalized points (radius 1)
-        const points: Point3D[] = [];
-        const phi = Math.PI * (3 - Math.sqrt(5));
-        for (let i = 0; i < 400; i++) {
-            const y = 1 - (i / (400 - 1)) * 2;
-            const radius = Math.sqrt(1 - y * y);
-            const theta = phi * i;
+        // Initial sizing
+        updateDimensions();
 
-            const x = Math.cos(theta) * radius;
-            const z = Math.sin(theta) * radius;
+        // Observer for robust resizing
+        const resizeObserver = new ResizeObserver(() => {
+            updateDimensions();
+        });
 
-            points.push({ x, y, z, lat: 0, lng: 0 });
+        if (containerRef.current) {
+            resizeObserver.observe(containerRef.current);
         }
 
-        // Attacks
-        let attacks: Arc[] = [];
-        let rotation = 0;
-        let animationId: number;
-
-        const createAttack = () => {
-            if (Math.random() > 0.05) return;
-            const start = points[Math.floor(Math.random() * points.length)];
-            const end = points[Math.floor(Math.random() * points.length)];
-
-            // Scaled dist check
-            const dist = Math.sqrt(Math.pow(start.x - end.x, 2) + Math.pow(start.y - end.y, 2) + Math.pow(start.z - end.z, 2));
-            if (dist < 0.2 || dist > 1.5) return; // Normalized filtering
-
-            attacks.push({
-                start,
-                end,
-                progress: 0,
-                speed: 0.02 + Math.random() * 0.03,
-                color: Math.random() > 0.8 ? '#ef4444' : '#06b6d4'
-            });
-        };
-
-        const draw = () => {
-            // Use current dynamic radius
-            const R = radiusRef.current;
-
-            ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.restore();
-
-            rotation += ROTATION_SPEED;
-            createAttack();
-
-            // Rotate and Project Points
-            const rotatedPoints = points.map(p => {
-                const x = p.x * Math.cos(rotation) - p.z * Math.sin(rotation);
-                const z = p.x * Math.sin(rotation) + p.z * Math.cos(rotation);
-                return {
-                    x: x * R,
-                    y: p.y * R,
-                    z: z * R,
-                    visible: z > 0
-                };
-            });
-
-            // Sort by depth for correct z-indexing (painters algorithm)
-            rotatedPoints.forEach(p => {
-                if (p.z > 0) {
-                    const alpha = p.z / R;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(100, 116, 139, ${alpha * 0.5})`;
-                    ctx.fill();
-                } else {
-                    // Backside dots (dimmer)
-                    const alpha = (p.z + R) / R; // normalize
-                    if (alpha > 0) {
-                        ctx.beginPath();
-                        ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
-                        ctx.fillStyle = `rgba(50, 60, 80, 0.2)`;
-                        ctx.fill();
-                    }
-                }
-            });
-
-            // Draw Attacks
-            attacks = attacks.filter(attack => attack.progress < 1);
-            attacks.forEach(attack => {
-                attack.progress += attack.speed;
-
-                // Rotate start/end points
-                const rotatePoint = (p: Point3D) => {
-                    const x = p.x * Math.cos(rotation) - p.z * Math.sin(rotation);
-                    const z = p.x * Math.sin(rotation) + p.z * Math.cos(rotation);
-                    return { x: x * R, y: p.y * R, z: z * R };
-                };
-                const s = rotatePoint(attack.start);
-                const e = rotatePoint(attack.end);
-
-                // Quadratic Bezier Curve for "Arc" height
-                const midX = (s.x + e.x) / 2;
-                const midY = (s.y + e.y) / 2;
-                const scalar = 1.5;
-                const cpX = midX * scalar;
-                const cpY = midY * scalar;
-
-                if (s.z > -50 && e.z > -50) { // Only draw if mostly visible
-                    // Draw full subtle arc
-                    ctx.beginPath();
-                    ctx.moveTo(s.x, s.y);
-                    ctx.quadraticCurveTo(cpX, cpY, e.x, e.y);
-                    ctx.strokeStyle = `rgba(6, 182, 212, 0.1)`;
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-
-                    // Draw head
-                    const t = attack.progress;
-                    const invT = 1 - t;
-                    const bx = invT * invT * s.x + 2 * invT * t * cpX + t * t * e.x;
-                    const by = invT * invT * s.y + 2 * invT * t * cpY + t * t * e.y;
-
-                    ctx.beginPath();
-                    ctx.arc(bx, by, 3, 0, Math.PI * 2);
-                    ctx.fillStyle = attack.color;
-                    ctx.shadowColor = attack.color;
-                    ctx.shadowBlur = 10;
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                }
-            });
-
-            animationId = requestAnimationFrame(draw);
-        };
-
-        draw();
-
-        return () => {
-            window.removeEventListener('resize', resize);
-            cancelAnimationFrame(animationId);
-        };
+        return () => resizeObserver.disconnect();
     }, []);
 
+    // Generate random "threat" data
+    const arcsData = useMemo(() => {
+        const N = 20; // Number of active threats
+        return [...Array(N).keys()].map(() => ({
+            startLat: (Math.random() - 0.5) * 180,
+            startLng: (Math.random() - 0.5) * 360,
+            endLat: (Math.random() - 0.5) * 180,
+            endLng: (Math.random() - 0.5) * 360,
+            // Mix of Cyan (Monitoring) and Red (Threat)
+            color: Math.random() > 0.6 ? ['rgba(255,0,0,0.5)', 'rgba(255,0,0,1)'] : ['rgba(0,255,255,0.5)', 'rgba(0,255,255,1)']
+        }));
+    }, []);
+
+    useEffect(() => {
+        // Auto-rotate
+        if (globeEl.current) {
+            globeEl.current.controls().autoRotate = true;
+            globeEl.current.controls().autoRotateSpeed = 0.6;
+            // Disable zoom/pan for a consistent "Dashboard" background feel
+            globeEl.current.controls().enableZoom = false;
+        }
+    }, [dimensions]); // Re-apply when dimensions change/globe remounts
+
     return (
-        <div className="w-full h-full bg-black/40 backdrop-blur-sm relative overflow-hidden flex items-center justify-center">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_#000_100%)] z-10 pointer-events-none"></div>
+        <div ref={containerRef} className="w-full h-full bg-black relative overflow-hidden flex items-center justify-center">
+            {/* Background Gradient for depth */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#0f172a_0%,_#000_100%)] z-0 pointer-events-none opacity-80"></div>
 
-            <canvas ref={canvasRef} className="w-full h-full relative z-0" />
+            {dimensions.width > 0 && (
+                <Globe
+                    ref={globeEl}
+                    width={dimensions.width}
+                    height={dimensions.height}
+                    backgroundColor="rgba(0,0,0,0)"
 
-            {/* Overlay Stats */}
-            <div className="absolute bottom-10 left-10 z-20 space-y-2 pointer-events-none">
+                    // Realistic Earth Textures
+                    globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+                    bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
+
+                    // Visual Styling
+                    atmosphereColor="#3a86ff" // Blueish atmosphere
+                    atmosphereAltitude={0.25}
+
+                    // Arcs (Threats)
+                    arcsData={arcsData}
+                    arcColor="color"
+                    arcDashLength={0.4}
+                    arcDashGap={2}
+                    arcDashInitialGap={() => Math.random()}
+                    arcDashAnimateTime={2000}
+                    arcStroke={0.5}
+
+                    // Add some rings for "scanned" effect
+                    ringsData={[{ lat: 0, lng: 0, maxR: 1000, propagationSpeed: 5, repeatPeriod: 500 }]} // Just a dummy ring to init system if needed, or remove
+
+                    // Interaction
+                    enablePointerInteraction={false} // Keep it as a focused visual
+                />
+            )}
+
+            {/* Overlay Stats - Kept from original */}
+            <div className="absolute bottom-10 left-10 z-30 space-y-2 pointer-events-none">
                 <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                    <span className="text-xs text-red-500 font-mono">CRITICAL THREATS DETECTED</span>
+                    <span className="text-xs text-red-500 font-mono tracking-wider">CRITICAL THREATS DETECTED</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
-                    <span className="text-xs text-cyan-500 font-mono">GLOBAL MONITORING ACTIVE</span>
+                    <span className="text-xs text-cyan-500 font-mono tracking-wider">GLOBAL MONITORING ACTIVE</span>
                 </div>
+            </div>
+
+            {/* Title Overlay similar to image */}
+            <div className="absolute top-10 right-10 z-30 text-right pointer-events-none">
+                <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-600">
+                    GLOBAL THREAT MAP
+                </h2>
+                <p className="text-[10px] text-cyan-500/50 font-mono mt-1">
+                    LIVE RELAY // SECTOR 7
+                </p>
             </div>
         </div>
     );
